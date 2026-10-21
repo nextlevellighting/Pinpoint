@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pinpoint</title>
+<meta name="description" content="Track every bowling game: your average, high game, trend, and frame-by-frame scores.">
+<meta name="theme-color" content="#c4202f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pinpoint">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column like a score sheet — entry pad, stats strip, trend chart, then the game log with frame sheets. */
+:root{
+  --bg:#f6f6f2; --surface:#ffffff; --fg:#1b1d22; --muted:#6a6e78; --line:#e1e1da;
+  --accent:#c4202f; --accent-ink:#ffffff; --good:#1d7a4a; --warn:#a15c00; --soft:#f1e3e1;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#111318; --surface:#1a1d24; --fg:#eceae4; --muted:#9a9ea8; --line:#2b2f38;
+  --accent:#ff5a5f; --accent-ink:#1a0b0c; --good:#4fc187; --warn:#f0a845; --soft:#2a1c1e; color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.wrap{max-width:640px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:800;font-size:2.2rem;letter-spacing:.01em;margin:0;line-height:1;text-transform:uppercase;display:flex;align-items:center}
+h1 span{color:var(--accent)}
+h1 .pin{height:2.1rem;width:auto;margin-right:8px;flex:none}
+.who{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.88rem;min-width:0}
+.who .em{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+h2{font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.num{font-variant-numeric:tabular-nums}
+label{font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input[type=date],input[type=text],input[type=email],input[type=password]{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;min-width:0}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{font-family:var(--display);font-weight:700;font-size:1.2rem;letter-spacing:.06em;text-transform:uppercase;border:0;border-radius:10px;background:var(--accent);color:var(--accent-ink);padding:12px 22px;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ghost{font:inherit;font-size:.85rem;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;padding:6px 10px;cursor:pointer}
+.link{font:inherit;border:0;background:none;color:var(--accent);font-weight:600;padding:0;cursor:pointer}
+.msg{font-size:.9rem;color:var(--muted);min-height:1.2em;margin:0}
+.msg.err{color:var(--accent)} .msg.ok{color:var(--good)}
+.msg:empty{display:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:14px}
+
+/* auth */
+.hero{display:grid;gap:8px}
+.hero p{margin:0;color:var(--muted);max-width:52ch}
+.hero .big{font-family:var(--display);font-weight:800;font-size:2.6rem;line-height:1;text-transform:uppercase;color:var(--fg);text-wrap:balance}
+.hero .big em{font-style:normal;color:var(--accent)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs button{font:inherit;font-weight:600;border:0;background:var(--bg);color:var(--muted);padding:10px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.field{display:grid;gap:4px}
+.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:.88rem;color:var(--muted)}
+.feat b{display:block;font-family:var(--display);font-size:1.1rem;letter-spacing:.04em;text-transform:uppercase;color:var(--fg)}
+@media (max-width:480px){.feat{grid-template-columns:1fr}}
+
+/* entry */
+.score-row{display:flex;gap:12px;align-items:stretch}
+.score-box{flex:1;min-width:0;display:grid;gap:4px}
+#score{font-family:var(--display);font-weight:800;font-size:3.2rem;line-height:1;width:100%;padding:8px 12px;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font-variant-numeric:tabular-nums}
+#score:focus{outline:none;border-color:var(--accent)}
+.meta-row{display:grid;grid-template-columns:150px 1fr;gap:12px}
+.meta-row > div{display:grid;gap:4px;min-width:0}
+@media (max-width:420px){.meta-row{grid-template-columns:1fr}}
+.frames-box{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px}
+.check{font-size:.88rem;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
+.check.ok{color:var(--good)} .check.bad{color:var(--warn)}
+.hint{font-size:.82rem;color:var(--muted);margin:0}
+
+/* frame sheet */
+.sheet-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.sheet{display:grid;grid-template-columns:repeat(9,minmax(40px,1fr)) minmax(58px,1.4fr);border:1px solid var(--fg);border-radius:4px;min-width:440px;background:var(--surface)}
+.fr{border-right:1px solid var(--fg);display:grid;grid-template-rows:auto auto auto}
+.fr:last-child{border-right:0}
+.fr .no{font-size:.66rem;text-align:center;color:var(--muted);border-bottom:1px solid var(--line);padding:1px 0}
+.fr .marks{display:flex;justify-content:flex-end;font-family:var(--display);font-weight:700;font-size:1rem;min-height:24px}
+.fr .marks span{width:18px;text-align:center;border-left:1px solid var(--line);line-height:24px}
+.fr .cum{font-family:var(--display);font-weight:700;font-size:1.05rem;text-align:center;padding:2px 0 3px;font-variant-numeric:tabular-nums;min-height:1.6em}
+.fr input{font-family:var(--display);font-weight:700;font-size:1.05rem;width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);text-align:center;padding:3px 0;text-transform:uppercase;min-width:0;border-radius:0}
+.fr input.bad{background:var(--soft);color:var(--accent)}
+.mk-x{color:var(--accent)}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stat{background:var(--surface);padding:12px 10px;display:grid;gap:2px;text-align:center}
+.stat b{font-family:var(--display);font-weight:800;font-size:1.9rem;line-height:1}
+.stat small{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat.lead b{color:var(--accent)}
+@media (max-width:420px){.stats{grid-template-columns:repeat(2,1fr)}}
+.substats{display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin-top:8px}
+.substats b{color:var(--fg);font-variant-numeric:tabular-nums}
+
+/* chart */
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 8px 6px}
+.chart svg{display:block;width:100%;height:auto}
+.legend{display:flex;gap:14px;font-size:.78rem;color:var(--muted);padding:2px 8px 6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:6px;background:var(--accent);border-radius:2px}
+.legend i.avg{background:none;border-top:2px dashed var(--muted);height:0}
+
+/* log */
+.log{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.log li{border-bottom:1px solid var(--line);padding:10px 2px;display:grid;gap:8px}
+.row{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center}
+.log .s{font-family:var(--display);font-weight:800;font-size:1.8rem;line-height:1;text-align:right}
+.log .s.hi{color:var(--accent)}
+.log .info{min-width:0}
+.log .d{font-weight:600}
+.log .n{color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
+.chip{display:inline-block;font-size:.68rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--soft);color:var(--accent);margin-left:6px;vertical-align:2px}
+.acts{display:flex;gap:6px}
+.ghost.arm{border-color:var(--accent);color:var(--accent);font-weight:600}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:22px;text-align:center;color:var(--muted)}
+.empty strong{display:block;font-family:var(--display);font-size:1.3rem;color:var(--fg);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.more{font:inherit;border:0;background:none;color:var(--accent);font-weight:600;padding:10px 0;cursor:pointer}
+.loading{color:var(--muted);text-align:center;padding:40px 0}
+.setup{border:2px dashed var(--accent);border-radius:12px;padding:16px;color:var(--fg)}
+@media (prefers-reduced-motion:no-preference){.log li.new{animation:pop .5s ease}@keyframes pop{from{background:var(--soft)}to{background:transparent}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><svg class="pin" viewBox="0 0 24 48" aria-hidden="true"><path d="M12 1.5C15.4 1.5 16.4 4.3 15.9 7.2C15.5 9.6 14.4 11 14.4 13C14.4 15.2 19 19.5 19 28C19 36 17.2 41.8 16.2 46.5H7.8C6.8 41.8 5 36 5 28C5 19.5 9.6 15.2 9.6 13C9.6 11 8.5 9.6 8.1 7.2C7.6 4.3 8.6 1.5 12 1.5Z" fill="var(--surface)" stroke="var(--fg)" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.4 12.2H14.6M9.5 14.6H14.5" stroke="var(--accent)" stroke-width="1.5" fill="none"/></svg>Pin<span>point</span></h1>
+    <div class="who" id="who" hidden><span class="em" id="whoEmail"></span><button class="ghost" id="signOut" type="button">Sign out</button></div>
+  </header>
+
+  <div class="loading" id="loading">Loading…</div>
+
+  <div class="setup" id="setupNote" hidden>
+    <strong>Almost ready.</strong> Open <code>config.js</code> and paste your Supabase project URL and anon key, then reload this page.
+  </div>
+
+  <!-- signed out -->
+  <section id="authView" hidden style="display:grid;gap:22px">
+    <div class="hero">
+      <div class="big">Know your <em>average</em>. Watch it climb.</div>
+      <p>Pinpoint keeps every game you bowl. Log your final score or all ten frames, and see your average, high game, and trend on any device.</p>
+    </div>
+    <div class="feat">
+      <div><b>Every game</b>Score, date, and a note, like league night or lane 12.</div>
+      <div><b>Frame by frame</b>Enter marks and Pinpoint does the scoring math.</div>
+      <div><b>Real stats</b>Average, last-10, strike and spare rates.</div>
+    </div>
+    <form class="card" id="authForm" novalidate>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tabIn" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tabUp" aria-selected="false">Create account</button>
+      </div>
+      <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email" required></div>
+      <div class="field" id="pwField"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" minlength="6" required></div>
+      <button class="btn" id="authBtn" type="submit">Sign in</button>
+      <p class="msg" id="authMsg" aria-live="polite"></p>
+      <div><button class="link" id="forgot" type="button">Forgot your password?</button></div>
+    </form>
+  </section>
+
+  <!-- password recovery -->
+  <form class="card" id="resetView" hidden novalidate>
+    <h2 style="margin:0">Set a new password</h2>
+    <div class="field"><label for="newPw">New password</label><input id="newPw" type="password" autocomplete="new-password" minlength="6"></div>
+    <button class="btn" type="submit">Save password</button>
+    <p class="msg" id="resetMsg" aria-live="polite"></p>
+  </form>
+
+  <!-- signed in -->
+  <div id="appView" hidden style="display:grid;gap:22px">
+    <form class="card" id="form" autocomplete="off" novalidate>
+      <div class="score-row">
+        <div class="score-box">
+          <label for="score">Final score</label>
+          <input id="score" type="number" inputmode="numeric" min="0" max="300" step="1" placeholder="0–300">
+        </div>
+        <button class="btn" id="add" type="submit">Add</button>
+      </div>
+      <div class="meta-row">
+        <div><label for="date">Date</label><input id="date" type="date"></div>
+        <div><label for="note">Note <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label><input id="note" type="text" maxlength="80" placeholder="League night, lane 12…"></div>
+      </div>
+      <div><button class="link" id="framesToggle" type="button">+ Add all 10 frames</button></div>
+      <div class="frames-box" id="framesBox" hidden>
+        <div class="sheet-scroll"><div class="sheet" id="editSheet"></div></div>
+        <p class="hint">X strike, / spare, - miss, digits for pins. The 10th frame takes up to three marks, like X9/.</p>
+        <div class="check" id="check"></div>
+      </div>
+      <p class="msg" id="msg" aria-live="polite"></p>
+    </form>
+
+    <section>
+      <h2>Totals</h2>
+      <div class="stats">
+        <div class="stat lead"><b class="num" id="sAvg">—</b><small>Average</small></div>
+        <div class="stat"><b class="num" id="sHigh">—</b><small>High game</small></div>
+        <div class="stat"><b class="num" id="sLast10">—</b><small>Last 10 avg</small></div>
+        <div class="stat"><b class="num" id="sCount">0</b><small>Games</small></div>
+      </div>
+      <div class="substats" id="substats" hidden></div>
+    </section>
+
+    <section id="trendSec" hidden>
+      <h2>Trend</h2>
+      <div class="chart">
+        <div class="legend"><span><i></i>Score</span><span><i class="avg"></i>Average</span><span id="chartRange"></span></div>
+        <svg id="chart" viewBox="0 0 600 220" role="img" aria-label="Scores over time"></svg>
+      </div>
+    </section>
+
+    <section>
+      <h2>Games</h2>
+      <div class="empty" id="empty"><strong>No games yet</strong>Type your final score above and tap Add. Your average and trend fill in from there.</div>
+      <ul class="log" id="log"></ul>
+      <button class="more" id="more" type="button" hidden>Show all games</button>
+    </section>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const show = (el,on) => { el.hidden = !on; };
+
+  /* ---------- bowling scoring ---------- */
+  function clean(s){ return String(s||"").toUpperCase().replace(/\s+/g,"").replace(/[GF0]/g,"-"); }
+  function frameRolls(marks, tenth){
+    const m = clean(marks); if(!m) return [];
+    const rolls=[]; let standing=10, inRack=0;
+    for (const c of m){
+      let v;
+      if (c==="X"){ if(inRack!==0) return null; v=10; }
+      else if (c==="/"){ if(inRack!==1) return null; v=standing; }
+      else if (c==="-") v=0;
+      else if (/[1-9]/.test(c)) v=+c;
+      else return null;
+      if (v>standing) return null;
+      rolls.push(v); standing-=v; inRack++;
+      if (standing===0 || inRack===2){ standing=10; inRack=0; }
+    }
+    if (!tenth){ if (rolls.length>2 || (rolls.length===2 && rolls[0]===10)) return null; }
+    else { if (rolls.length>3) return null; if (rolls.length===3 && rolls[0]+rolls[1]<10) return null; }
+    return rolls;
+  }
+  function frameDone(r, tenth){
+    if (!r) return false;
+    if (!tenth) return r[0]===10 || r.length===2;
+    if (r.length<2) return false;
+    return r[0]+r[1]>=10 ? r.length===3 : r.length===2;
+  }
+  function scoreFrames(frames){
+    const per=frames.map((f,i)=>frameRolls(f,i===9));
+    const bad=per.map((r,i)=>r===null?i:-1).filter(i=>i>=0);
+    const cum=new Array(10).fill(null);
+    if (bad.length) return {cum,total:null,bad};
+    const all=[], starts=[];
+    per.forEach(r=>{ starts.push(all.length); all.push(...r); });
+    let run=0;
+    for (let i=0;i<10;i++){
+      const r=per[i], s=starts[i];
+      if (!frameDone(r,i===9)) break;
+      let fs;
+      if (i===9) fs=r.reduce((a,b)=>a+b,0);
+      else if (r[0]===10){ if(all[s+1]===undefined||all[s+2]===undefined) break; fs=10+all[s+1]+all[s+2]; }
+      else if (r[0]+r[1]===10){ if(all[s+2]===undefined) break; fs=10+all[s+2]; }
+      else fs=r[0]+r[1];
+      run+=fs; cum[i]=run;
+    }
+    return {cum,total:cum[9],bad};
+  }
+  window.__scoreFrames = scoreFrames;
+
+  /* ---------- config ---------- */
+  const cfg = window.PINPOINT_CONFIG || {};
+  const configured = /^https:\/\/.+/.test(cfg.SUPABASE_URL||"") && cfg.SUPABASE_ANON_KEY && !/PASTE/.test(cfg.SUPABASE_ANON_KEY);
+  if (!configured || !window.supabase){ show($("loading"),false); show($("setupNote"),true); return; }
+  const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+  /* ---------- helpers ---------- */
+  function today(){ const d=new Date(), z=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate()); }
+  function fmtDate(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:y===new Date().getFullYear()?undefined:"numeric"}); }
+  function avg(list){ return list.length ? list.reduce((t,g)=>t+g.score,0)/list.length : 0; }
+  function setMsg(el,t,kind){ el.textContent=t||""; el.className="msg"+(kind?" "+kind:""); }
+  function friendly(err){
+    const m=(err&&err.message)||"";
+    if (/Invalid login/i.test(m)) return "That email and password don't match. Try again or reset your password.";
+    if (/Email not confirmed/i.test(m)) return "Check your email and tap the confirmation link first.";
+    if (/already registered/i.test(m)) return "There's already an account with that email. Sign in instead.";
+    if (/Password should be/i.test(m)) return "Use a password with at least 6 characters.";
+    if (/rate limit/i.test(m)) return "Too many tries. Wait a few minutes and try again.";
+    if (/fetch|network/i.test(m)) return "Can't reach the server. Check your connection.";
+    return m || "Something went wrong. Try again.";
+  }
+
+  /* ---------- views ---------- */
+  let user=null;
+  function go(view){
+    show($("loading"),false);
+    show($("authView"),view==="auth");
+    show($("resetView"),view==="reset");
+    show($("appView"),view==="app");
+    show($("who"),view==="app");
+  }
+
+  /* ---------- auth ---------- */
+  let mode="in";
+  function setMode(m){
+    mode=m;
+    $("tabIn").setAttribute("aria-selected",String(m==="in"));
+    $("tabUp").setAttribute("aria-selected",String(m==="up"));
+    $("authBtn").textContent = m==="in" ? "Sign in" : m==="up" ? "Create account" : "Send reset link";
+    show($("pwField"), m!=="forgot");
+    $("password").autocomplete = m==="up" ? "new-password" : "current-password";
+    $("forgot").textContent = m==="forgot" ? "Back to sign in" : "Forgot your password?";
+    setMsg($("authMsg"),"");
+  }
+  $("tabIn").onclick=()=>setMode("in");
+  $("tabUp").onclick=()=>setMode("up");
+  $("forgot").onclick=()=>setMode(mode==="forgot"?"in":"forgot");
+
+  $("authForm").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const email=$("email").value.trim(), password=$("password").value;
+    const msg=$("authMsg");
+    if (!/^\S+@\S+\.\S+$/.test(email)){ setMsg(msg,"Enter a valid email address.","err"); return; }
+    if (mode!=="forgot" && password.length<6){ setMsg(msg,"Use a password with at least 6 characters.","err"); return; }
+    $("authBtn").disabled=true;
+    try{
+      if (mode==="in"){
+        const {error}=await sb.auth.signInWithPassword({email,password}); if(error) throw error;
+      } else if (mode==="up"){
+        const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+        if (error) throw error;
+        if (!data.session) setMsg(msg,"Account created. Check your email for a confirmation link, then sign in.","ok");
+      } else {
+        const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+        if (error) throw error;
+        setMsg(msg,"If that email has an account, a reset link is on its way.","ok");
+      }
+    }catch(err){ setMsg(msg,friendly(err),"err"); }
+    finally{ $("authBtn").disabled=false; }
+  });
+
+  $("resetView").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const pw=$("newPw").value;
+    if (pw.length<6){ setMsg($("resetMsg"),"Use at least 6 characters.","err"); return; }
+    const {error}=await sb.auth.updateUser({password:pw});
+    if (error){ setMsg($("resetMsg"),friendly(error),"err"); return; }
+    setMsg($("resetMsg"),"Password saved.","ok");
+    setTimeout(()=>{ if(user) { go("app"); loadGames(); } },800);
+  });
+
+  $("signOut").onclick=async()=>{ await sb.auth.signOut(); };
+
+  let recovering=false;
+  sb.auth.onAuthStateChange((event, session)=>{
+    if (event==="PASSWORD_RECOVERY"){ recovering=true; user=session&&session.user; go("reset"); return; }
+    const was=user&&user.id;
+    user = session ? session.user : null;
+    if (recovering) return;
+    if (user){
+      $("whoEmail").textContent=user.email||"";
+      go("app");
+      if (was!==user.id) loadGames();
+    } else { games=[]; go("auth"); setMode("in"); }
+  });
+
+  /* ---------- games ---------- */
+  let games=[], showAll=false, lastAdded=null, armed=null;
+  const openFrames=new Set();
+
+  async function loadGames(){
+    const {data,error}=await sb.from("games").select("id,score,played_on,note,frames,created_at").order("played_on",{ascending:true}).order("created_at",{ascending:true});
+    if (error){ setMsg($("msg"),"Couldn't load your games. "+friendly(error),"err"); return; }
+    games=data||[]; render();
+  }
+  function sorted(){ return games.slice().sort((a,b)=> a.played_on===b.played_on ? (a.created_at<b.created_at?-1:1) : (a.played_on<b.played_on?-1:1)); }
+
+  /* frame entry */
+  let frames=null;
+  $("framesToggle").onclick=()=>{
+    if (frames){ frames=null; show($("framesBox"),false); $("framesToggle").textContent="+ Add all 10 frames"; return; }
+    frames=new Array(10).fill(""); buildEditor(); show($("framesBox"),true); $("framesToggle").textContent="Remove frames"; $("f0").focus();
+  };
+  function buildEditor(){
+    const sh=$("editSheet"); sh.textContent="";
+    frames.forEach((f,i)=>{
+      const fr=document.createElement("div"); fr.className="fr";
+      const no=document.createElement("div"); no.className="no"; no.textContent=i+1;
+      const inp=document.createElement("input"); inp.id="f"+i; inp.value=f; inp.maxLength=i===9?3:2;
+      inp.setAttribute("aria-label","Frame "+(i+1)+" marks"); inp.autocapitalize="characters"; inp.spellcheck=false;
+      inp.addEventListener("input",()=>{
+        frames[i]=inp.value; updateEditor();
+        const r=frameRolls(inp.value,i===9);
+        if (i<9 && frameDone(r,false)) $("f"+(i+1)).focus();
+      });
+      const cu=document.createElement("div"); cu.className="cum"; cu.id="c"+i;
+      fr.append(no,inp,cu); sh.appendChild(fr);
+    });
+    updateEditor();
+  }
+  function updateEditor(){
+    const sc=scoreFrames(frames);
+    for(let i=0;i<10;i++){ $("c"+i).textContent=sc.cum[i]??""; $("f"+i).className=sc.bad.includes(i)?"bad":""; }
+    const el=$("check");
+    if (sc.bad.length){ el.className="check bad"; el.textContent="Frame "+sc.bad.map(i=>i+1).join(", ")+" doesn't read as a valid frame."; return; }
+    if (sc.total==null){ el.className="check"; el.textContent="Keep going. The total fills in when all 10 frames are done."; return; }
+    el.className="check ok"; el.textContent="Frames add up to "+sc.total+"."; $("score").value=sc.total;
+  }
+
+  $("date").value=today();
+  $("form").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const msg=$("msg");
+    const raw=$("score").value.trim(), v=Number(raw);
+    if (raw===""||!Number.isInteger(v)||v<0||v>300){ setMsg(msg,"Enter a whole-number score from 0 to 300.","err"); $("score").focus(); return; }
+    const row={score:v,played_on:$("date").value||today(),note:$("note").value.trim()||null};
+    if (frames){
+      const sc=scoreFrames(frames);
+      if (sc.bad.length||sc.total==null){ setMsg(msg,"Finish or fix the frames first, or tap Remove frames.","err"); return; }
+      if (sc.total!==v){ setMsg(msg,`The frames add up to ${sc.total}, but the score says ${v}. Fix one so they match.`,"err"); return; }
+      row.frames=frames.map(clean);
+    }
+    $("add").disabled=true;
+    const {data,error}=await sb.from("games").insert(row).select("id,score,played_on,note,frames,created_at").single();
+    $("add").disabled=false;
+    if (error){ setMsg(msg,"Couldn't save that game. "+friendly(error),"err"); return; }
+    games.push(data); lastAdded=data.id;
+    $("score").value=""; $("note").value="";
+    if (frames){ frames=null; show($("framesBox"),false); $("framesToggle").textContent="+ Add all 10 frames"; }
+    setMsg(msg, v===300?"Perfect game saved. 300!":`Saved ${v}.`, "ok");
+    render();
+  });
+
+  async function onDelete(id){
+    if (armed!==id){ armed=id; render(); setTimeout(()=>{ if(armed===id){armed=null;render();} },4000); return; }
+    armed=null;
+    const {error}=await sb.from("games").delete().eq("id",id);
+    if (error){ setMsg($("msg"),"Couldn't delete that game. "+friendly(error),"err"); return; }
+    games=games.filter(g=>g.id!==id); setMsg($("msg"),"Game deleted."); render();
+  }
+  $("more").onclick=()=>{ showAll=!showAll; render(); };
+
+  /* ---------- render ---------- */
+  function sheetEl(fr){
+    const sc=scoreFrames(fr);
+    const el=document.createElement("div"); el.className="sheet";
+    fr.forEach((f,i)=>{
+      const box=document.createElement("div"); box.className="fr";
+      const no=document.createElement("div"); no.className="no"; no.textContent=i+1;
+      const mk=document.createElement("div"); mk.className="marks";
+      const chars=clean(f).split(""), slots=i===9?3:2;
+      const cells=(i<9&&chars[0]==="X")?["","X"]:chars.concat(new Array(Math.max(0,slots-chars.length)).fill(""));
+      cells.slice(0,slots).forEach(c=>{ const sp=document.createElement("span"); sp.textContent=c; if(c==="X"||c==="/") sp.className="mk-x"; mk.appendChild(sp); });
+      const cu=document.createElement("div"); cu.className="cum"; cu.textContent=sc.cum[i]??"";
+      box.append(no,mk,cu); el.appendChild(box);
+    });
+    return el;
+  }
+
+  function render(){
+    const asc=sorted(), n=asc.length;
+    const high=n?Math.max(...asc.map(g=>g.score)):0;
+    $("sAvg").textContent=n?Math.round(avg(asc)):"—";
+    $("sHigh").textContent=n?high:"—";
+    $("sLast10").textContent=n?Math.round(avg(asc.slice(-10))):"—";
+    $("sCount").textContent=n;
+    show($("empty"),n===0);
+
+    const withF=asc.filter(g=>Array.isArray(g.frames)&&g.frames.length===10);
+    const ss=$("substats");
+    if (withF.length){
+      let fr=0,x=0,sp=0,op=0;
+      withF.forEach(g=>g.frames.forEach((f,i)=>{ const r=frameRolls(f,i===9); if(!r||!r.length) return; fr++;
+        if(r[0]===10) x++; else if(r.length>1&&r[0]+r[1]===10) sp++; else op++; }));
+      const p=v=>fr?Math.round(100*v/fr)+"%":"—";
+      ss.innerHTML=`<span>Strikes <b>${p(x)}</b></span><span>Spares <b>${p(sp)}</b></span><span>Open frames <b>${p(op)}</b></span><span>from ${withF.length} game${withF.length===1?"":"s"} with frames</span>`;
+      show(ss,true);
+    } else show(ss,false);
+
+    const desc=asc.slice().reverse(), shown=showAll?desc:desc.slice(0,15);
+    const ul=$("log"); ul.textContent="";
+    shown.forEach(g=>{
+      const li=document.createElement("li"); if(g.id===lastAdded) li.className="new";
+      const row=document.createElement("div"); row.className="row";
+      const s=document.createElement("div"); s.className="s num"+(g.score===high&&n>1?" hi":""); s.textContent=g.score;
+      const info=document.createElement("div"); info.className="info";
+      const d=document.createElement("div"); d.className="d"; d.textContent=fmtDate(g.played_on);
+      const chip=t=>{ const c=document.createElement("span"); c.className="chip"; c.textContent=t; d.appendChild(c); };
+      if (g.score===300) chip("Perfect"); else if (g.score===high&&n>1) chip("High"); else if (g.score>=200) chip("200+");
+      info.appendChild(d);
+      if (g.note){ const no=document.createElement("div"); no.className="n"; no.textContent=g.note; info.appendChild(no); }
+      const acts=document.createElement("div"); acts.className="acts";
+      const hasF=Array.isArray(g.frames)&&g.frames.length===10;
+      if (hasF){ const t=document.createElement("button"); t.type="button"; t.className="ghost"; t.textContent=openFrames.has(g.id)?"Hide":"Frames"; t.onclick=()=>{ openFrames.has(g.id)?openFrames.delete(g.id):openFrames.add(g.id); render(); }; acts.appendChild(t); }
+      const b=document.createElement("button"); b.type="button"; b.className="ghost"+(armed===g.id?" arm":""); b.textContent=armed===g.id?"Confirm":"Delete"; b.onclick=()=>onDelete(g.id); acts.appendChild(b);
+      row.append(s,info,acts); li.appendChild(row);
+      if (hasF&&openFrames.has(g.id)){ const w=document.createElement("div"); w.className="sheet-scroll"; w.appendChild(sheetEl(g.frames)); li.appendChild(w); }
+      ul.appendChild(li);
+    });
+    show($("more"),desc.length>15);
+    $("more").textContent=showAll?"Show recent only":"Show all "+desc.length+" games";
+    drawChart(asc);
+  }
+
+  function drawChart(asc){
+    const sec=$("trendSec"), svg=$("chart");
+    if (asc.length<2){ show(sec,false); return; }
+    show(sec,true);
+    const pts=asc.slice(-40);
+    const W=600,H=220,L=40,R=14,T=12,B=26;
+    const lo=Math.min(...pts.map(g=>g.score)), hi=Math.max(...pts.map(g=>g.score));
+    let yMin=Math.max(0,Math.floor((lo-10)/50)*50), yMax=Math.min(300,Math.ceil((hi+10)/50)*50);
+    if (yMax-yMin<100){ yMax=Math.min(300,yMin+100); if(yMax-yMin<100) yMin=yMax-100; }
+    const x=i=>L+i*(W-L-R)/(pts.length-1), y=v=>T+(yMax-v)*(H-T-B)/(yMax-yMin);
+    let s="";
+    for(let v=yMin;v<=yMax;v+=50) s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="var(--body)">${v}</text>`;
+    const a=avg(asc);
+    if (a>=yMin&&a<=yMax) s+=`<line x1="${L}" x2="${W-R}" y1="${y(a)}" y2="${y(a)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    const line=pts.map((g,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(g.score).toFixed(1)).join(" ");
+    s+=`<path d="${line} L${x(pts.length-1).toFixed(1)} ${H-B} L${x(0).toFixed(1)} ${H-B} Z" fill="var(--accent)" fill-opacity=".1"/>`;
+    s+=`<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    pts.forEach((g,i)=>{ const last=i===pts.length-1; s+=`<circle cx="${x(i)}" cy="${y(g.score)}" r="${last?5:3}" fill="${last?'var(--accent)':'var(--surface)'}" stroke="var(--accent)" stroke-width="2"><title>${g.score} · ${g.played_on}</title></circle>`; });
+    const lp=pts[pts.length-1], lx=x(pts.length-1), ly=y(lp.score);
+    s+=`<text x="${lx-8}" y="${ly<T+18?ly+20:ly-10}" text-anchor="end" font-size="14" font-weight="700" fill="var(--fg)" font-family="var(--body)">${lp.score}</text>`;
+    s+=`<text x="${L}" y="${H-6}" font-size="11" fill="var(--muted)" font-family="var(--body)">${fmtDate(pts[0].played_on)}</text><text x="${W-R}" y="${H-6}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--body)">${fmtDate(lp.played_on)}</text>`;
+    svg.innerHTML=s;
+    $("chartRange").textContent=asc.length>40?"Last 40 games":"";
+  }
+
+  // safety net if auth never answers
+  setTimeout(()=>{ if(!$("loading").hidden) go("auth"); },6000);
+})();
+</script>
+</body>
+</html>
