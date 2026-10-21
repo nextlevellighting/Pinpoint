@@ -1,6 +1,6 @@
 # Pinpoint
 
-Bowling score tracker. Sign up, log your games (final score or all 10 frames), and see your average, high game, last-10 average, strike/spare rates, and trend.
+Bowling score tracker. Scan the lane screen or type your score, compare averages with friends, and track weekly league nights.
 
 Static site (plain HTML + JS) using Supabase for logins and storage. Hosted free on GitHub Pages.
 
@@ -13,9 +13,18 @@ Static site (plain HTML + JS) using Supabase for logins and storage. Hosted free
    - Project Settings → API: copy the **Project URL** and **anon / publishable key** into `config.js`.
 2. **GitHub Pages** — push these files to a repo, then Settings → Pages → Source: *Deploy from a branch* → `main` / root → Save.
 
+## Upgrade (friends, leagues, scanning)
+
+1. SQL Editor → run `setup-v2.sql` (after `setup.sql`).
+2. Get a free Gemini API key at https://aistudio.google.com → Get API key.
+3. Supabase → Edge Functions → Deploy a new function → Via Editor → name it `scan` → paste `supabase/functions/scan/index.ts` → Deploy.
+4. Edge Functions → Secrets → add `GEMINI_API_KEY` with your key.
+
 ## Files
 
 - `index.html` — the whole app
 - `config.js` — your Supabase URL + public key
-- `setup.sql` — database table + security rules (each user sees only their own games)
+- `setup.sql` — games table + security rules
+- `setup-v2.sql` — usernames, friends, leagues, and who-can-see-what rules
+- `supabase/functions/scan/index.ts` — photo scanning (Gemini)
 - `manifest.webmanifest`, `icon*.png`, `icon.svg` — home-screen app icon
