@@ -45,7 +45,11 @@ h2{font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:.12e
 h3{font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1.05;margin:0;text-transform:uppercase;letter-spacing:.02em;overflow-wrap:anywhere}
 .num{font-variant-numeric:tabular-nums}
 label{font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-input[type=date],input[type=text],input[type=email],input[type=password],select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;min-width:0}
+input[type=date],input[type=text],input[type=email],input[type=password],select{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;min-width:0;max-width:100%;height:46px;margin:0;display:block}
+input[type=date]{-webkit-appearance:none;appearance:none;text-align:left;line-height:24px}
+input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+input[type=date]::-webkit-calendar-picker-indicator{opacity:.6}
+select{-webkit-appearance:none;appearance:none;padding-right:34px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat}
 input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn{font-family:var(--display);font-weight:700;font-size:1.2rem;letter-spacing:.06em;text-transform:uppercase;border:0;border-radius:10px;background:var(--accent);color:var(--accent-ink);padding:12px 22px;cursor:pointer;white-space:nowrap}
 .btn.sm{font-size:1rem;padding:9px 16px;border-radius:8px}
@@ -94,8 +98,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .score-box{flex:1;min-width:0;display:grid;gap:4px}
 #score{font-family:var(--display);font-weight:800;font-size:3.2rem;line-height:1;width:100%;padding:8px 12px;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font-variant-numeric:tabular-nums}
 #score:focus{outline:none;border-color:var(--accent)}
-.meta-row{display:grid;grid-template-columns:150px 1fr;gap:12px}
-@media (max-width:420px){.meta-row{grid-template-columns:1fr}}
+.meta-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:12px;align-items:end}
+.meta-row > *{min-width:0;overflow:hidden}
+@media (max-width:360px){.meta-row{grid-template-columns:1fr}}
+.update-bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--accent);color:var(--accent-ink);text-align:center;font-weight:600;padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .frames-box{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px}
 .bowlers{display:flex;gap:8px;flex-wrap:wrap}
 .bowlers button{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:99px;padding:6px 14px;cursor:pointer}
@@ -357,7 +363,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
   </div>
 </div>
 
-<script src="config.js"></script>
+<script src="config.js?v=2026.10.21-2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function(){
@@ -370,6 +376,32 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     kids.flat().forEach(c=>{ if(c==null||c===false) return; e.append(c instanceof Node?c:String(c)); });
     return e;
   }
+
+  /* ---------- auto-update: reload when a new version is published ---------- */
+  const APP_VERSION="2026.10.21-2";   // must match version.json
+  let updating=false;
+  function busy(){ return !!($("score")?.value || $("note")?.value || !$("framesBox")?.hidden || document.activeElement?.tagName==="INPUT"); }
+  function reloadTo(v){ location.replace(location.pathname+"?v="+encodeURIComponent(v)+location.hash); }
+  async function checkUpdate(){
+    if (updating) return;
+    try{
+      const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"});
+      if (!r.ok) return;
+      const v=String((await r.json()).version||"");
+      if (!v||v===APP_VERSION) return;
+      updating=true;
+      if (busy()){
+        document.body.append(el("button",{type:"button",class:"update-bar",style:"border:0;width:100%;font:inherit;font-weight:600;cursor:pointer",onclick:()=>reloadTo(v)},"New version of Pinpoint ready. Tap to update."));
+      } else {
+        document.body.append(el("div",{class:"update-bar"},"Updating Pinpoint…"));
+        setTimeout(()=>reloadTo(v),500);
+      }
+    }catch(e){}
+  }
+  setTimeout(checkUpdate,1500);
+  setInterval(checkUpdate,5*60*1000);
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkUpdate(); });
+  window.addEventListener("pageshow",e=>{ if(e.persisted) checkUpdate(); });
 
   /* ---------- bowling scoring ---------- */
   function clean(s){ return String(s||"").toUpperCase().replace(/\s+/g,"").replace(/[GF0]/g,"-"); }
@@ -535,7 +567,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     const was=me&&me.id;
     me=session?session.user:null;
     if (recovering) return;
-    if (!me){ started=null; myName=null; games=[]; go("authView"); setMode("in"); return; }
+    if (!me){ stopLive(); started=null; myName=null; games=[]; go("authView"); setMode("in"); return; }
     if (was!==me.id||!started) setTimeout(start,0);
   });
 
@@ -550,7 +582,45 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     go("appView");
     openTab((location.hash||"").slice(1)||"games");
     await Promise.all([loadGames(),loadLeagues(),loadFriends()]);
+    startLive();
   }
+
+  /* ---------- live updates (Supabase Realtime; respects the same privacy rules) ---------- */
+  let live=null, liveTimer=null, liveWhat=new Set();
+  function liveKick(what){
+    what.forEach(w=>liveWhat.add(w));
+    clearTimeout(liveTimer);
+    liveTimer=setTimeout(async()=>{
+      const w=new Set(liveWhat); liveWhat.clear();
+      if (!me) return;
+      const jobs=[];
+      if (w.has("mine")) jobs.push(loadGames());
+      if (w.has("leagues")) jobs.push(loadLeagues());
+      if (w.has("friends")) jobs.push(loadFriends());
+      if (w.has("league")){ leagueCache.clear(); if(curLeague&&!$("tab-leagues").hidden) jobs.push(openLeague(curLeague)); }
+      await Promise.all(jobs);
+    },400);
+  }
+  function stopLive(){ if(live){ try{ sb.removeChannel(live); }catch(e){} live=null; } }
+  function startLive(){
+    stopLive();
+    if (!sb.channel) return;
+    live=sb.channel("pinpoint-live")
+      .on("postgres_changes",{event:"*",schema:"public",table:"games"},p=>{
+        const row=p.new&&p.new.user_id?p.new:p.old||{};
+        const w=["friends","league"];
+        if (p.eventType==="DELETE"||row.user_id===me.id) w.push("mine");
+        liveKick(w);
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"friendships"},()=>liveKick(["friends"]))
+      .on("postgres_changes",{event:"*",schema:"public",table:"league_members"},()=>liveKick(["leagues","league"]))
+      .on("postgres_changes",{event:"*",schema:"public",table:"leagues"},()=>liveKick(["leagues","league"]))
+      .subscribe();
+  }
+  // phones pause connections in the background: catch up when the app comes back
+  document.addEventListener("visibilitychange",()=>{
+    if (document.visibilityState==="visible"&&me&&myName){ liveKick(["mine","friends","leagues","league"]); if(!live||live.state!=="joined") startLive(); }
+  });
 
   /* ---------- tabs ---------- */
   const tabs=["games","friends","leagues"];
