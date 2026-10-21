@@ -567,7 +567,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     const was=me&&me.id;
     me=session?session.user:null;
     if (recovering) return;
-    if (!me){ started=null; myName=null; games=[]; go("authView"); setMode("in"); return; }
+    if (!me){ stopLive(); started=null; myName=null; games=[]; go("authView"); setMode("in"); return; }
     if (was!==me.id||!started) setTimeout(start,0);
   });
 
@@ -582,7 +582,45 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     go("appView");
     openTab((location.hash||"").slice(1)||"games");
     await Promise.all([loadGames(),loadLeagues(),loadFriends()]);
+    startLive();
   }
+
+  /* ---------- live updates (Supabase Realtime; respects the same privacy rules) ---------- */
+  let live=null, liveTimer=null, liveWhat=new Set();
+  function liveKick(what){
+    what.forEach(w=>liveWhat.add(w));
+    clearTimeout(liveTimer);
+    liveTimer=setTimeout(async()=>{
+      const w=new Set(liveWhat); liveWhat.clear();
+      if (!me) return;
+      const jobs=[];
+      if (w.has("mine")) jobs.push(loadGames());
+      if (w.has("leagues")) jobs.push(loadLeagues());
+      if (w.has("friends")) jobs.push(loadFriends());
+      if (w.has("league")){ leagueCache.clear(); if(curLeague&&!$("tab-leagues").hidden) jobs.push(openLeague(curLeague)); }
+      await Promise.all(jobs);
+    },400);
+  }
+  function stopLive(){ if(live){ try{ sb.removeChannel(live); }catch(e){} live=null; } }
+  function startLive(){
+    stopLive();
+    if (!sb.channel) return;
+    live=sb.channel("pinpoint-live")
+      .on("postgres_changes",{event:"*",schema:"public",table:"games"},p=>{
+        const row=p.new&&p.new.user_id?p.new:p.old||{};
+        const w=["friends","league"];
+        if (p.eventType==="DELETE"||row.user_id===me.id) w.push("mine");
+        liveKick(w);
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"friendships"},()=>liveKick(["friends"]))
+      .on("postgres_changes",{event:"*",schema:"public",table:"league_members"},()=>liveKick(["leagues","league"]))
+      .on("postgres_changes",{event:"*",schema:"public",table:"leagues"},()=>liveKick(["leagues","league"]))
+      .subscribe();
+  }
+  // phones pause connections in the background: catch up when the app comes back
+  document.addEventListener("visibilitychange",()=>{
+    if (document.visibilityState==="visible"&&me&&myName){ liveKick(["mine","friends","leagues","league"]); if(!live||live.state!=="joined") startLive(); }
+  });
 
   /* ---------- tabs ---------- */
   const tabs=["games","friends","leagues"];

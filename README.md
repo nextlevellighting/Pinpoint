@@ -20,6 +20,10 @@ Static site (plain HTML + JS) using Supabase for logins and storage. Hosted free
 3. Supabase → Edge Functions → Deploy a new function → Via Editor → name it `scan` → paste `supabase/functions/scan/index.ts` → Deploy.
 4. Edge Functions → Secrets → add `GEMINI_API_KEY` with your key.
 
+## Live updates
+
+SQL Editor → run `setup-v3.sql` to turn on Supabase Realtime for games, friends, and leagues.
+
 ## Releasing an update
 
 Bump the version in **both** `version.json` and `APP_VERSION` in `index.html` (and the `config.js?v=` tag). Open copies of the app check `version.json` on open and every 5 minutes, and reload themselves when it changes.
@@ -30,5 +34,7 @@ Bump the version in **both** `version.json` and `APP_VERSION` in `index.html` (a
 - `config.js` — your Supabase URL + public key
 - `setup.sql` — games table + security rules
 - `setup-v2.sql` — usernames, friends, leagues, and who-can-see-what rules
+- `setup-v3.sql` — turns on live updates
+- `version.json` — current version; open apps reload when it changes
 - `supabase/functions/scan/index.ts` — photo scanning (Gemini)
 - `manifest.webmanifest`, `icon*.png`, `icon.svg` — home-screen app icon
