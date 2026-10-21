@@ -130,6 +130,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .stat small{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .stat.lead b{color:var(--accent)}
 @media (max-width:420px){.stats{grid-template-columns:repeat(2,1fr)}}
+.leaves{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:12px;margin-top:12px}
+.leaves .lh{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.lv{display:grid;grid-template-columns:minmax(0,96px) minmax(0,1fr) 56px 46px;align-items:center;gap:10px}
+.lv .lab{font-weight:600;line-height:1.15}
+.lv .lab small{display:block;font-weight:400;color:var(--muted);font-size:.76rem}
+.lv .bar{height:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.lv .bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.lv .ct{color:var(--muted);font-size:.82rem;text-align:right;font-variant-numeric:tabular-nums}
+.lv .pct{font-family:var(--display);font-weight:800;font-size:1.2rem;text-align:right;font-variant-numeric:tabular-nums}
 .substats{display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);margin-top:8px}
 .substats b{color:var(--fg);font-variant-numeric:tabular-nums}
 
@@ -297,8 +306,23 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
           <div class="stat"><b class="num" id="sLast10">—</b><small>Last 10 avg</small></div>
           <div class="stat"><b class="num" id="sCount">0</b><small>Games</small></div>
         </div>
-        <div class="substats" id="substats" hidden></div>
       </section>
+
+      <section id="spareSec" hidden>
+        <h2>Spares &amp; strikes</h2>
+        <div class="stats">
+          <div class="stat lead"><b class="num" id="spPct">—</b><small>Spare %</small></div>
+          <div class="stat"><b class="num" id="spSingle">—</b><small>Single-pin %</small></div>
+          <div class="stat"><b class="num" id="spStrike">—</b><small>Strike %</small></div>
+          <div class="stat"><b class="num" id="spFirst">—</b><small>First ball avg</small></div>
+        </div>
+        <div class="leaves">
+          <div class="lh">Spare pickups by pins left</div>
+          <div id="leaves" style="display:grid;gap:10px"></div>
+        </div>
+        <div class="substats" id="spMore"></div>
+      </section>
+      <p class="hint" id="spareHint" hidden>Scan the lane screen or type all 10 frames to unlock spare pickups, strike %, and first-ball average.</p>
 
       <section id="trendSec" hidden>
         <h2>Trend</h2>
@@ -363,7 +387,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
   </div>
 </div>
 
-<script src="config.js?v=2026.10.21-2"></script>
+<script src="config.js?v=2026.10.21-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function(){
@@ -378,7 +402,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
   }
 
   /* ---------- auto-update: reload when a new version is published ---------- */
-  const APP_VERSION="2026.10.21-2";   // must match version.json
+  const APP_VERSION="2026.10.21-3";   // must match version.json
   let updating=false;
   function busy(){ return !!($("score")?.value || $("note")?.value || !$("framesBox")?.hidden || document.activeElement?.tagName==="INPUT"); }
   function reloadTo(v){ location.replace(location.pathname+"?v="+encodeURIComponent(v)+location.hash); }
@@ -450,6 +474,42 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     return {cum,total:cum[9],bad};
   }
   window.__scoreFrames=scoreFrames;
+
+  // Spare / strike analysis from frame marks (games with all 10 frames)
+  function analyze(list){
+    const s={games:0,racks:0,strikes:0,pins:0,chances:0,made:0,leave:{1:[0,0],2:[0,0],3:[0,0],4:[0,0]},clean:0,opens:0,turkeys:0};
+    list.forEach(g=>{
+      if (!Array.isArray(g.frames)||g.frames.length!==10) return;
+      const per=g.frames.map((f,i)=>frameRolls(f,i===9));
+      if (per.some((r,i)=>!r||!frameDone(r,i===9))) return;
+      s.games++;
+      let open=0; const racks=[]; // each rack: [first ball, second ball or undefined]
+      per.forEach((r,i)=>{
+        if (i<9){ racks.push([r[0],r[0]<10?r[1]:undefined]); if(r[0]<10&&r[0]+r[1]<10) open++; return; }
+        if (r[0]===10){
+          racks.push([10]);
+          if (r[1]===10){ racks.push([10]); racks.push([r[2]]); }   // third ball is a fill ball
+          else racks.push([r[1],r[2]]);                            // spare chance after a strike
+        } else {
+          racks.push([r[0],r[1]]);
+          if (r[0]+r[1]===10) racks.push([r[2]]); else open++;
+        }
+      });
+      let run=0;
+      racks.forEach(([a,b])=>{
+        s.racks++; s.pins+=a;
+        if (a===10){ s.strikes++; run++; if(run===3) s.turkeys++; return; }
+        run=0;
+        if (b===undefined) return;
+        const left=Math.min(4,10-a);
+        s.chances++; s.leave[left][1]++;
+        if (a+b===10){ s.made++; s.leave[left][0]++; }
+      });
+      s.opens+=open; if(!open) s.clean++;
+    });
+    return s;
+  }
+  window.__analyze=analyze;
 
   /* ---------- config ---------- */
   const cfg=window.PINPOINT_CONFIG||{};
@@ -770,16 +830,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     $("sCount").textContent=n;
     show($("empty"),n===0);
 
-    const withF=asc.filter(g=>Array.isArray(g.frames)&&g.frames.length===10), ss=$("substats");
-    if (withF.length){
-      let fr=0,x=0,sp=0,op=0;
-      withF.forEach(g=>g.frames.forEach((f,i)=>{ const r=frameRolls(f,i===9); if(!r||!r.length) return; fr++;
-        if(r[0]===10) x++; else if(r.length>1&&r[0]+r[1]===10) sp++; else op++; }));
-      const p=v=>fr?Math.round(100*v/fr)+"%":"—";
-      ss.textContent="";
-      ss.append(el("span",null,"Strikes ",el("b",{text:p(x)})),el("span",null,"Spares ",el("b",{text:p(sp)})),el("span",null,"Open frames ",el("b",{text:p(op)})),el("span",{text:`from ${withF.length} game${withF.length===1?"":"s"} with frames`}));
-      show(ss,true);
-    } else show(ss,false);
+    renderSpares(asc);
 
     const desc=asc.slice().reverse(), shown=showAll?desc:desc.slice(0,15), ul=$("log");
     ul.textContent="";
@@ -808,6 +859,33 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     drawChart(asc);
   }
   $("more").onclick=()=>{ showAll=!showAll; renderGames(); };
+
+  function renderSpares(asc){
+    const a=analyze(asc);
+    show($("spareSec"),a.games>0); show($("spareHint"),a.games===0&&asc.length>0);
+    if (!a.games) return;
+    const pct=(m,c)=>c?Math.round(100*m/c)+"%":"—";
+    $("spPct").textContent=pct(a.made,a.chances);
+    $("spSingle").textContent=pct(a.leave[1][0],a.leave[1][1]);
+    $("spStrike").textContent=pct(a.strikes,a.racks);
+    $("spFirst").textContent=a.racks?(a.pins/a.racks).toFixed(1):"—";
+    const rows=[[1,"1 pin","9 count"],[2,"2 pins","8 count"],[3,"3 pins","7 count"],[4,"4+ pins","6 or less"]];
+    const box=$("leaves"); box.textContent="";
+    rows.forEach(([k,lab,sub])=>{
+      const [m,c]=a.leave[k], w=c?Math.round(100*m/c):0;
+      box.append(el("div",{class:"lv"},
+        el("div",{class:"lab"},lab,el("small",{text:sub})),
+        el("div",{class:"bar",role:"img","aria-label":`${lab}: ${m} of ${c} picked up`},el("i",{style:`width:${w}%`})),
+        el("div",{class:"ct",text:`${m} of ${c}`}),
+        el("div",{class:"pct",text:c?w+"%":"—"})));
+    });
+    const more=$("spMore"); more.textContent="";
+    more.append(
+      el("span",null,"Clean games ",el("b",{text:`${a.clean} of ${a.games}`})),
+      el("span",null,"Opens per game ",el("b",{text:(a.opens/a.games).toFixed(1)})),
+      el("span",null,"Turkeys ",el("b",{text:a.turkeys})),
+      el("span",{text:`from ${a.games} game${a.games===1?"":"s"} with frames`}));
+  }
 
   function drawChart(asc){
     const sec=$("trendSec"),svg=$("chart");
@@ -867,19 +945,20 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
     const fids=friendships.filter(f=>f.status==="accepted").map(otherOf);
     let fg=[];
     if (fids.length){
-      const {data}=await sb.from("games").select("user_id,score,played_on,created_at").in("user_id",fids);
+      const {data}=await sb.from("games").select("user_id,score,played_on,created_at,frames").in("user_id",fids);
       fg=data||[];
     }
-    const rows=[{id:me.id,...statsOf(games)}].concat(fids.map(id=>({id,...statsOf(fg.filter(g=>g.user_id===id))})));
+    const spare=list=>{ const a=analyze(list); return a.chances?Math.round(100*a.made/a.chances)+"%":"—"; };
+    const rows=[{id:me.id,...statsOf(games),sp:spare(games)}].concat(fids.map(id=>{ const l=fg.filter(g=>g.user_id===id); return {id,...statsOf(l),sp:spare(l)}; }));
     rows.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
     const t=$("board"); t.textContent="";
-    t.append(el("thead",null,el("tr",null,["#","Bowler","Avg","Last 10","High","Games",""].map(h=>el("th",{text:h})))));
+    t.append(el("thead",null,el("tr",null,["#","Bowler","Avg","Spare %","Last 10","High","Games",""].map(h=>el("th",{text:h})))));
     const tb=el("tbody");
     rows.forEach((r,i)=>{
       const isMe=r.id===me.id, f=friendships.find(x=>x.status==="accepted"&&otherOf(x)===r.id);
       tb.append(el("tr",{class:isMe?"me":null},
         el("td",{class:"rk",text:r.n?i+1:"–"}), el("td",{class:"nm",text:isMe?"@"+myName+" (you)":"@"+nm(r.id)}),
-        el("td",{class:"big",text:r.avg??"—"}), el("td",{text:r.last10??"—"}), el("td",{text:r.high??"—"}), el("td",{text:r.n}),
+        el("td",{class:"big",text:r.avg??"—"}), el("td",{text:r.sp}), el("td",{text:r.last10??"—"}), el("td",{text:r.high??"—"}), el("td",{text:r.n}),
         el("td",null,isMe||!f?null:armBtn(el("button",{type:"button",class:"ghost"}),"Remove","Confirm",async()=>{ await sb.from("friendships").delete().eq("id",f.id); loadFriends(); }))));
     });
     t.append(tb);
