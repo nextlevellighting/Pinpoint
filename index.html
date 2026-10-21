@@ -387,7 +387,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
   </div>
 </div>
 
-<script src="config.js?v=2026.10.21-3"></script>
+<script src="config.js?v=2026.10.21-4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function(){
@@ -402,7 +402,7 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
   }
 
   /* ---------- auto-update: reload when a new version is published ---------- */
-  const APP_VERSION="2026.10.21-3";   // must match version.json
+  const APP_VERSION="2026.10.21-4";   // must match version.json
   let updating=false;
   function busy(){ return !!($("score")?.value || $("note")?.value || !$("framesBox")?.hidden || document.activeElement?.tagName==="INPUT"); }
   function reloadTo(v){ location.replace(location.pathname+"?v="+encodeURIComponent(v)+location.hash); }
@@ -768,8 +768,12 @@ table.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
       const image=await shrink(file);
       const {data,error}=await sb.functions.invoke("scan",{body:{image,mimeType:"image/jpeg"}});
       if (error){
-        let detail=""; try{ detail=(await error.context.json()).error||""; }catch(e){}
-        throw new Error(detail||"Scan failed. Check your connection and try again.");
+        let detail="", status=error.context&&error.context.status;
+        try{ const j=await error.context.json(); detail=j.error||j.message||j.msg||""; }catch(e){}
+        if (status===404) detail="The scan service isn't set up yet. In Supabase, deploy an Edge Function named exactly “scan”.";
+        else if (status===401&&/jwt/i.test(detail)) detail="Supabase blocked the scan. In Supabase → Edge Functions → scan → Details, turn off “Verify JWT” and save.";
+        else if (!status) detail="Couldn't reach the scan service. Check your connection, or make sure the “scan” function is deployed.";
+        throw new Error((detail||"Scan failed.")+(status?` (code ${status})`:""));
       }
       const list=(data&&Array.isArray(data.bowlers)?data.bowlers:[]).map(b=>({
         name:String(b.name||"").trim().slice(0,30),
