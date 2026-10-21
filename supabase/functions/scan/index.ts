@@ -25,6 +25,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST" }, 405);
 
+  // Check the caller is a signed-in Pinpoint user (works with new publishable keys,
+  // so the dashboard's "Verify JWT" setting can be turned off).
+  const auth = req.headers.get("Authorization") || "";
+  const apikey = req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const who = await fetch(`${Deno.env.get("SUPABASE_URL")}/auth/v1/user`, { headers: { Authorization: auth, apikey } })
+    .catch(() => null);
+  if (!who || !who.ok) return json({ error: "Sign in again, then retry the scan." }, 401);
+
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) return json({ error: "Scanning isn't set up yet: the GEMINI_API_KEY secret is missing." }, 500);
 
