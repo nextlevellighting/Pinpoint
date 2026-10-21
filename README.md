@@ -20,6 +20,10 @@ Static site (plain HTML + JS) using Supabase for logins and storage. Hosted free
 3. Supabase → Edge Functions → Deploy a new function → Via Editor → name it `scan` → paste `supabase/functions/scan/index.ts` → Deploy.
 4. Edge Functions → Secrets → add `GEMINI_API_KEY` with your key.
 
+## Releasing an update
+
+Bump the version in **both** `version.json` and `APP_VERSION` in `index.html` (and the `config.js?v=` tag). Open copies of the app check `version.json` on open and every 5 minutes, and reload themselves when it changes.
+
 ## Files
 
 - `index.html` — the whole app
